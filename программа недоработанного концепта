@@ -1,0 +1,50 @@
+import cv2
+import numpy as np
+import concurrent.futures
+from flask import Flask, request, jsonify
+app = Flask(__name__)
+def load_defect_detection_model(model_path):
+    model = tf.keras.models.load_model(model_path)
+    return model
+def preprocess_image(image):
+    processed_image = image  
+    return processed_image
+def process_multiple_images(image_paths, model):
+    results = []
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = {executor.submit(process_image, path, model): path for path in image_paths}
+        for future in concurrent.futures.as_completed(futures):
+            path = futures[future]
+            try:
+                result = future.result()
+                results.append({path: result})
+            except Exception as e:
+                results.append({path: {"error": str(e)}})
+    return results
+def process_image(image_path, model):
+    image = cv2.imread(image_path)
+    if image is None:
+        return {"error": "Невозможно загрузить изображение"}
+    processed_image = preprocess_image(image)
+    
+        
+    return {"result": "defect detected" if np.random.rand() > 0.5 else "no defect detected"}
+@app.route('/upload', methods=['POST'])
+def upload():
+    if 'files' not in request.files:
+        return jsonify({"error": "Файлы не отправлены"})
+    
+    files = request.files.getlist('files')
+    img_paths = []
+    for file in files:
+        img_path = f"uploaded_{file.filename}"
+        file.save(img_path)
+        img_paths.append(img_path)
+
+    model_path = 'path/to/defect_detection_model.h5'
+    defect_detection_model = load_defect_detection_model(model_path)
+    results = process_multiple_images(img_paths, defect_detection_model) 
+    return jsonify(results)
+if __name__ == '__main__':
+    app.run(debug=True)
+
